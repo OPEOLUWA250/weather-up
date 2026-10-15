@@ -1,12 +1,22 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchWeather } from './src/api';
-import { Weather } from './src/types';
+import { CitySearch } from './src/components/CitySearch';
+import { Icon } from './src/components/Icon';
+import { City, Weather } from './src/types';
 
-// Hard-coded for now. Later we'll use city search and GPS.
-const CITY = { name: 'Lagos', latitude: 6.5244, longitude: 3.3792 };
+// The city shown when the app first opens.
+const DEFAULT_CITY: City = {
+  id: 2332459,
+  name: 'Lagos',
+  region: 'Lagos',
+  country: 'Nigeria',
+  latitude: 6.45407,
+  longitude: 3.39467,
+};
 
 // A union type: the screen is always in exactly ONE of these states.
 type Status = 'loading' | 'success' | 'error';
@@ -29,6 +39,7 @@ function DetailItem({ label, value }: DetailItemProps) {
 
 export default function App() {
   // State: data that can change. When it changes, the screen re-draws.
+  const [city, setCity] = useState<City>(DEFAULT_CITY);
   const [status, setStatus] = useState<Status>('loading');
   const [weather, setWeather] = useState<Weather | null>(null);
 
@@ -36,7 +47,7 @@ export default function App() {
   async function loadWeather() {
     setStatus('loading');
     try {
-      const data = await fetchWeather(CITY.name, CITY.latitude, CITY.longitude);
+      const data = await fetchWeather(city);
       setWeather(data);
       setStatus('success');
     } catch (error) {
@@ -45,62 +56,68 @@ export default function App() {
     }
   }
 
-  // Load the weather once, when the app starts.
+  // Runs when the app starts AND every time `city` changes.
   useEffect(() => {
     loadWeather();
-  }, []);
+  }, [city]);
 
-  // 1. Loading: show a spinner.
-  if (status === 'loading') {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#fff" />
-        <Text style={styles.message}>Loading weather...</Text>
-        <StatusBar style="light" />
-      </View>
-    );
-  }
-
-  // 2. Error: explain what happened and offer a retry.
-  // (We also check `weather === null` so TypeScript knows it has data below.)
-  if (status === 'error' || weather === null) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.icon}>⚠️</Text>
-        <Text style={styles.errorTitle}>Couldn't load the weather</Text>
-        <Text style={styles.message}>
-          Check your internet connection and try again.
-        </Text>
-        <Pressable
-          onPress={loadWeather}
-          style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
-        >
-          <Text style={styles.retryButtonText}>Try again</Text>
-        </Pressable>
-        <StatusBar style="light" />
-      </View>
-    );
-  }
-
-  // 3. Success: show the weather.
   return (
-    <View style={styles.container}>
-      <Text style={styles.city}>{weather.city}</Text>
-      <Text style={styles.icon}>{weather.icon}</Text>
-      <Text style={styles.temperature}>{weather.temperature}°</Text>
-      <Text style={styles.condition}>{weather.condition}</Text>
-      <Text style={styles.highLow}>
-        H: {weather.high}°   L: {weather.low}°
-      </Text>
+    <SafeAreaProvider>
+      {/* SafeAreaView keeps content clear of the status bar and system buttons */}
+      <SafeAreaView style={styles.container}>
+        <CitySearch onSelectCity={setCity} />
 
-      <View style={styles.detailsCard}>
-        <DetailItem label="Feels like" value={`${weather.feelsLike}°`} />
-        <DetailItem label="Humidity" value={`${weather.humidity}%`} />
-        <DetailItem label="Wind" value={`${weather.windSpeed} km/h`} />
-      </View>
+        {/* ScrollView lets the content scroll if it doesn't fit on screen */}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* `condition && (...)` shows the UI only when the condition is true */}
+          {status === 'loading' && (
+            <>
+              <ActivityIndicator size="large" color="#fff" />
+              <Text style={styles.message}>Loading weather...</Text>
+            </>
+          )}
 
-      <StatusBar style="light" />
-    </View>
+          {status === 'error' && (
+            <>
+              <Icon name="triangle-exclamation" size={64} color="#fff" style={styles.icon} />
+              <Text style={styles.errorTitle}>Couldn't load the weather</Text>
+              <Text style={styles.message}>
+                Check your internet connection and try again.
+              </Text>
+              <Pressable
+                onPress={loadWeather}
+                style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+              >
+                <Text style={styles.retryButtonText}>Try again</Text>
+              </Pressable>
+            </>
+          )}
+
+          {status === 'success' && weather !== null && (
+            <>
+              <Text style={styles.city}>{weather.city}</Text>
+              <Icon name={weather.icon} size={96} color="#fff" style={styles.icon} />
+              <Text style={styles.temperature}>{weather.temperature}°</Text>
+              <Text style={styles.condition}>{weather.condition}</Text>
+              <Text style={styles.highLow}>
+                H: {weather.high}°   L: {weather.low}°
+              </Text>
+
+              <View style={styles.detailsCard}>
+                <DetailItem label="Feels like" value={`${weather.feelsLike}°`} />
+                <DetailItem label="Humidity" value={`${weather.humidity}%`} />
+                <DetailItem label="Wind" value={`${weather.windSpeed} km/h`} />
+              </View>
+            </>
+          )}
+        </ScrollView>
+
+        <StatusBar style="light" />
+      </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
@@ -108,18 +125,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#4A90E2',
+    paddingHorizontal: 24,
+  },
+  content: {
+    flexGrow: 1, // Fill the available space so content can be centred
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    paddingVertical: 24,
   },
   city: {
     fontSize: 32,
     fontWeight: '600',
     color: '#fff',
+    textAlign: 'center',
   },
   icon: {
-    fontSize: 96,
-    marginVertical: 8,
+    marginVertical: 16,
   },
   temperature: {
     fontSize: 96,
