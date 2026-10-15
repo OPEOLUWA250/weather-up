@@ -29,7 +29,12 @@ export function ForecastSummary({ weather, unit }: ForecastSummaryProps) {
 
   // Find the best voice whenever the language changes.
   useEffect(() => {
-    findVoice(language).then(setVoice);
+    findVoice(language)
+      .then(setVoice)
+      .catch((error) => {
+        console.warn('Could not choose a voice:', error);
+        setVoice(null); // Fall back to the phone's default voice
+      });
   }, [language]);
 
   // Stop talking when the forecast or language changes, or this card

@@ -40,7 +40,8 @@ export async function findVoice(language: Language): Promise<Speech.Voice | null
 
   for (const code of VOICE_LANGUAGES[language]) {
     const matches = voices.filter(
-      (voice) => voice.language.replace('_', '-').toLowerCase() === code.toLowerCase(),
+      // `?? ''` guards against a voice with no language listed.
+      (voice) => (voice.language ?? '').replace('_', '-').toLowerCase() === code.toLowerCase(),
     );
     // Prefer voices stored on the phone over ones that stream from the
     // internet ("network" in the name): they start speaking much faster.

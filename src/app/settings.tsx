@@ -4,7 +4,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 're
 
 import { Icon, IconName } from '../components/Icon';
 import { LANGUAGE_NAMES } from '../i18n';
-import { requestAlertPermission, sendTestAlert } from '../notifications';
+import { alertsAvailable, requestAlertPermission, sendTestAlert } from '../notifications';
 import { useSettings } from '../settings';
 import { Language, Unit, VoiceSpeed } from '../types';
 
@@ -152,25 +152,34 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="Morning alert" icon="bell">
-        <View style={styles.switchRow}>
-          <Text style={styles.switchLabel}>Weather alert at 7 AM</Text>
-          <Switch
-            value={morningAlert}
-            onValueChange={handleAlertChange}
-            trackColor={{ true: BLUE }}
-          />
-        </View>
-        <Text style={styles.note}>
-          Uses the last city you viewed. Alerts are planned 3 days ahead, so open the app every few
-          days to keep them coming.
-        </Text>
-        <Pressable
-          onPress={handleTestAlert}
-          style={({ pressed }) => [styles.testButton, pressed && styles.rowPressed]}
-        >
-          <Icon name="paper-plane" size={14} color={BLUE} />
-          <Text style={styles.testButtonText}>Send a test alert now</Text>
-        </Pressable>
+        {alertsAvailable ? (
+          <>
+            <View style={styles.switchRow}>
+              <Text style={styles.switchLabel}>Weather alert at 7 AM</Text>
+              <Switch
+                value={morningAlert}
+                onValueChange={handleAlertChange}
+                trackColor={{ true: BLUE }}
+              />
+            </View>
+            <Text style={styles.note}>
+              Uses the last city you viewed. Alerts are planned 3 days ahead, so open the app every
+              few days to keep them coming.
+            </Text>
+            <Pressable
+              onPress={handleTestAlert}
+              style={({ pressed }) => [styles.testButton, pressed && styles.rowPressed]}
+            >
+              <Icon name="paper-plane" size={14} color={BLUE} />
+              <Text style={styles.testButtonText}>Send a test alert now</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Text style={styles.note}>
+            Notifications aren't available in this version of the app. They will work once the app
+            is installed as a full build (APK).
+          </Text>
+        )}
       </Section>
 
       <Text style={styles.footer}>Weather data by Open-Meteo.com</Text>
