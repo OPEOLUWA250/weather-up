@@ -19,7 +19,8 @@ export type IconName =
   | 'cloud-bolt'
   | 'temperature-half'
   | 'triangle-exclamation'
-  | 'magnifying-glass';
+  | 'magnifying-glass'
+  | 'location-crosshairs';
 
 interface IconProps {
   name: IconName;

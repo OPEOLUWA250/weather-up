@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import { searchCities } from '../api';
+import { getCurrentCity } from '../location';
 import { City } from '../types';
 import { Icon } from './Icon';
 
@@ -40,6 +41,20 @@ export function CitySearch({ onSelectCity }: CitySearchProps) {
     setMessage(null);
   }
 
+  async function handleUseLocation() {
+    Keyboard.dismiss();
+    setResults([]);
+    setMessage('Finding your location...');
+
+    try {
+      const city = await getCurrentCity();
+      handleSelect(city); // Same as tapping a search result
+    } catch (error) {
+      // getCurrentCity throws errors with friendly messages, so we can show them.
+      setMessage(error instanceof Error ? error.message : "Couldn't find your location.");
+    }
+  }
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.searchRow}>
@@ -59,6 +74,13 @@ export function CitySearch({ onSelectCity }: CitySearchProps) {
           style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}
         >
           <Icon name="magnifying-glass" size={18} color="#4A90E2" />
+        </Pressable>
+        <Pressable
+          onPress={handleUseLocation}
+          accessibilityLabel="Use my current location"
+          style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}
+        >
+          <Icon name="location-crosshairs" size={18} color="#4A90E2" />
         </Pressable>
       </View>
 
