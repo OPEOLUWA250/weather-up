@@ -11,10 +11,21 @@ interface OpenMeteoResponse {
     wind_speed_10m: number;
     is_day: number; // 1 = day, 0 = night
   };
+  // Hourly data comes as separate lists that line up by position:
+  // time[3], temperature_2m[3] and weather_code[3] all describe the same hour.
+  hourly: {
+    time: string[];
+    temperature_2m: number[];
+    weather_code: number[];
+    is_day: number[];
+  };
+  // Daily data works the same way. Index [0] is today.
   daily: {
-    // Arrays: one value per day. We ask for 1 day, so we use index [0].
+    time: string[];
+    weather_code: number[];
     temperature_2m_max: number[];
     temperature_2m_min: number[];
+    precipitation_probability_max: (number | null)[]; // Can be missing for some days
   };
 }
 
@@ -40,8 +51,9 @@ export async function fetchWeather(city: City): Promise<Weather> {
   const url =
     `${FORECAST_URL}?latitude=${city.latitude}&longitude=${city.longitude}` +
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day' +
-    '&daily=temperature_2m_max,temperature_2m_min' +
-    '&timezone=auto&forecast_days=1';
+    '&hourly=temperature_2m,weather_code,is_day' +
+    '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+    '&timezone=auto&forecast_days=7&forecast_hours=24';
 
   // `await` pauses here until the server responds.
   const response = await fetch(url);
@@ -68,6 +80,19 @@ export async function fetchWeather(city: City): Promise<Weather> {
     low: Math.round(data.daily.temperature_2m_min[0]),
     humidity: data.current.relative_humidity_2m,
     windSpeed: Math.round(data.current.wind_speed_10m),
+    // Combine the separate lists into one object per hour, using the index `i`.
+    hourly: data.hourly.time.map((time, i) => ({
+      time,
+      temperature: Math.round(data.hourly.temperature_2m[i]),
+      icon: getWeatherInfo(data.hourly.weather_code[i], data.hourly.is_day[i] === 1).icon,
+    })),
+    daily: data.daily.time.map((date, i) => ({
+      date,
+      high: Math.round(data.daily.temperature_2m_max[i]),
+      low: Math.round(data.daily.temperature_2m_min[i]),
+      icon: getWeatherInfo(data.daily.weather_code[i], true).icon, // Daytime icons
+      rainChance: data.daily.precipitation_probability_max[i] ?? 0,
+    })),
   };
 }
 

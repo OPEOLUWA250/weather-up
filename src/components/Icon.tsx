@@ -20,7 +20,10 @@ export type IconName =
   | 'temperature-half'
   | 'triangle-exclamation'
   | 'magnifying-glass'
-  | 'location-crosshairs';
+  | 'location-crosshairs'
+  | 'clock'
+  | 'calendar-days'
+  | 'droplet';
 
 interface IconProps {
   name: IconName;

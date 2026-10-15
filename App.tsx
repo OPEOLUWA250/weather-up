@@ -5,6 +5,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchWeather } from './src/api';
 import { CitySearch } from './src/components/CitySearch';
+import { DailyForecast } from './src/components/DailyForecast';
+import { HourlyForecast } from './src/components/HourlyForecast';
 import { Icon } from './src/components/Icon';
 import { City, Weather } from './src/types';
 
@@ -71,6 +73,8 @@ export default function App() {
         <ScrollView
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false} // Hide the scrollbar on the right
+          overScrollMode="never" // Android: no stretch effect at the top/bottom
         >
           {/* `condition && (...)` shows the UI only when the condition is true */}
           {status === 'loading' && (
@@ -111,6 +115,9 @@ export default function App() {
                 <DetailItem label="Humidity" value={`${weather.humidity}%`} />
                 <DetailItem label="Wind" value={`${weather.windSpeed} km/h`} />
               </View>
+
+              <HourlyForecast hours={weather.hourly} />
+              <DailyForecast days={weather.daily} />
             </>
           )}
         </ScrollView>
