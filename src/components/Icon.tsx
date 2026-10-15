@@ -27,7 +27,16 @@ export type IconName =
   | 'star'
   | 'comment-dots'
   | 'volume-high'
-  | 'stop';
+  | 'stop'
+  | 'gear'
+  | 'wifi'
+  | 'arrow-up'
+  | 'arrow-down'
+  | 'lungs'
+  | 'bell'
+  | 'language'
+  | 'circle-check'
+  | 'paper-plane';
 
 interface IconProps {
   name: IconName;

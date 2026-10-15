@@ -1,14 +1,17 @@
 import { formatHour, formatTemp } from './format';
-import { HourForecast, Unit, Weather, WeatherGroup } from './types';
+import { PHRASES } from './i18n';
+import { TempFeel } from './i18n/phrases';
+import { HourForecast, Language, Unit, Weather, WeatherGroup } from './types';
 
 // Turns the forecast into short, plain sentences with practical advice,
 // for people who find numbers and icons hard to understand.
 // Everything here is simple if/else rules — no internet or AI needed.
+// The rules decide WHAT to say; the language files (src/i18n) decide HOW.
 
 const WET_GROUPS: WeatherGroup[] = ['drizzle', 'rain', 'storm'];
 
-function describeTemperature(celsius: number): string {
-  if (celsius >= 35) return 'very hot';
+function feelFor(celsius: number): TempFeel {
+  if (celsius >= 35) return 'veryHot';
   if (celsius >= 30) return 'hot';
   if (celsius >= 24) return 'warm';
   if (celsius >= 17) return 'mild';
@@ -17,28 +20,26 @@ function describeTemperature(celsius: number): string {
   return 'freezing';
 }
 
-// "right now" for the current hour, otherwise "around 2 PM".
-function describeWhen(hours: HourForecast[], index: number): string {
-  return index === 0 ? 'right now' : `around ${formatHour(hours[index].time)}`;
-}
-
-export function summarizeWeather(weather: Weather, unit: Unit): string[] {
+export function summarizeWeather(weather: Weather, unit: Unit, language: Language): string[] {
+  const say = PHRASES[language];
   const sentences: string[] = [];
   const temp = (celsius: number) => formatTemp(celsius, unit);
 
+  // "right now" for the current hour, otherwise "around 2 PM".
+  const when = (hours: HourForecast[], index: number) =>
+    index === 0 ? say.rightNow : say.around(formatHour(hours[index].time));
+
   // 1. How it is right now.
   sentences.push(
-    `Right now it is ${describeTemperature(weather.feelsLike)}: ` +
-      `${temp(weather.temperature)} and ${weather.condition.toLowerCase()}.`,
+    say.now(say.feel[feelFor(weather.feelsLike)], temp(weather.temperature), say.condition[weather.group]),
   );
 
   // 2. Explain "feels like" when it's very different from the real temperature.
   const difference = weather.feelsLike - weather.temperature;
   if (difference >= 3) {
-    const reason = weather.humidity >= 60 ? ', because the air is very humid' : '';
-    sentences.push(`It feels hotter than that, like ${temp(weather.feelsLike)}${reason}.`);
+    sentences.push(say.feelsHotter(temp(weather.feelsLike), weather.humidity >= 60));
   } else if (difference <= -3) {
-    sentences.push(`It feels colder than that, like ${temp(weather.feelsLike)}, because of the wind.`);
+    sentences.push(say.feelsColder(temp(weather.feelsLike)));
   }
 
   // 3. Storms, snow or rain in the next 12 hours. The most serious one wins.
@@ -48,47 +49,53 @@ export function summarizeWeather(weather: Weather, unit: Unit): string[] {
   const rainIndex = next12Hours.findIndex((hour) => WET_GROUPS.includes(hour.group));
 
   if (stormIndex !== -1) {
-    sentences.push(
-      `Thunderstorms are possible ${describeWhen(next12Hours, stormIndex)}. Stay indoors if you can.`,
-    );
+    sentences.push(say.storm(when(next12Hours, stormIndex)));
   } else if (snowIndex !== -1) {
-    sentences.push(
-      `Snow is likely ${describeWhen(next12Hours, snowIndex)}. Dress warmly and walk carefully.`,
-    );
+    sentences.push(say.snow(when(next12Hours, snowIndex)));
   } else if (rainIndex !== -1) {
-    sentences.push(`Rain is likely ${describeWhen(next12Hours, rainIndex)}. Take an umbrella.`);
+    sentences.push(say.rain(when(next12Hours, rainIndex)));
   } else {
-    sentences.push('No rain is expected in the next 12 hours.');
+    sentences.push(say.noRain);
   }
 
   // 4. Today's highest and lowest temperatures.
   const today = weather.daily[0];
   if (today) {
-    sentences.push(`Today it will get up to ${temp(today.high)} and down to ${temp(today.low)}.`);
+    sentences.push(say.todayRange(temp(today.high), temp(today.low)));
   }
 
   // 5. Wind.
   if (weather.windSpeed >= 40) {
-    sentences.push('It is very windy. Be careful outside.');
+    sentences.push(say.veryWindy);
   } else if (weather.windSpeed >= 25) {
-    sentences.push('It is quite windy.');
+    sentences.push(say.windy);
   }
 
   // 6. Advice for heat and cold.
   if (weather.feelsLike >= 30) {
-    sentences.push('Drink plenty of water and stay in the shade.');
+    sentences.push(say.heatAdvice);
   } else if (weather.feelsLike < 10) {
-    sentences.push('Wear a warm jacket.');
+    sentences.push(say.coldAdvice);
   }
 
-  // 7. The week ahead.
+  // 7. Strong sun (UV 8+ is "very high") and air pollution.
+  if (weather.uvIndex >= 8) {
+    sentences.push(say.strongSun);
+  }
+  if (weather.airQuality !== null && weather.airQuality > 150) {
+    sentences.push(say.airUnhealthy);
+  } else if (weather.airQuality !== null && weather.airQuality > 100) {
+    sentences.push(say.airPoor);
+  }
+
+  // 8. The week ahead.
   const rainyDays = weather.daily.filter((day) => day.rainChance >= 50).length;
   if (rainyDays === 0) {
-    sentences.push('The week looks dry.');
+    sentences.push(say.weekDry);
   } else if (rainyDays >= 5) {
-    sentences.push('Expect rain on most days this week.');
+    sentences.push(say.weekMostlyRain);
   } else {
-    sentences.push(`Rain is likely on ${rainyDays} of the next 7 days.`);
+    sentences.push(say.weekSomeRain(rainyDays));
   }
 
   return sentences;

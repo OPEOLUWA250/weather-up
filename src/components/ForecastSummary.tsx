@@ -2,7 +2,9 @@ import * as Speech from 'expo-speech';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { getNigerianVoice } from '../speech';
+import { PHRASES } from '../i18n';
+import { useSettings } from '../settings';
+import { findVoice, SPEECH_RATE } from '../speech';
 import { summarizeWeather } from '../summary';
 import { Unit, Weather } from '../types';
 import { Card } from './Card';
@@ -16,22 +18,27 @@ interface ForecastSummaryProps {
 // Explains the forecast in simple sentences, and can read them aloud
 // for people who can't read the screen.
 export function ForecastSummary({ weather, unit }: ForecastSummaryProps) {
+  // Language and voice speed come from Settings, via React Context.
+  const { language, voiceSpeed } = useSettings();
+  const say = PHRASES[language];
+  const sentences = summarizeWeather(weather, unit, language);
+
   const [speaking, setSpeaking] = useState(false);
-  // undefined = still looking, null = no Nigerian voice on this phone
+  // undefined = still looking, null = no suitable voice on this phone
   const [voice, setVoice] = useState<Speech.Voice | null | undefined>(undefined);
-  const sentences = summarizeWeather(weather, unit);
 
+  // Find the best voice whenever the language changes.
   useEffect(() => {
-    getNigerianVoice().then(setVoice);
-  }, []);
+    findVoice(language).then(setVoice);
+  }, [language]);
 
-  // Stop talking when the forecast changes (e.g. a new city) or this card
+  // Stop talking when the forecast or language changes, or this card
   // disappears. A function returned from useEffect is a "cleanup" function.
   useEffect(() => {
     return () => {
       Speech.stop();
     };
-  }, [weather, unit]);
+  }, [weather, unit, language]);
 
   function handleReadAloud() {
     if (speaking) {
@@ -49,8 +56,8 @@ export function ForecastSummary({ weather, unit }: ForecastSummaryProps) {
       // Voices don't say "°" well, so we swap it for the word "degrees".
       Speech.speak(sentence.replace(/°/g, ' degrees'), {
         language: 'en',
-        voice: voice?.identifier, // The Nigerian voice, if the phone has one
-        rate: 0.95, // Slightly slower than normal, easier to follow
+        voice: voice?.identifier, // The best voice found for this language
+        rate: SPEECH_RATE[voiceSpeed],
         onDone: isLast ? () => setSpeaking(false) : undefined,
         onStopped: () => setSpeaking(false),
         onError: () => setSpeaking(false),
@@ -59,7 +66,7 @@ export function ForecastSummary({ weather, unit }: ForecastSummaryProps) {
   }
 
   return (
-    <Card title="In plain words" icon="comment-dots">
+    <Card title={say.cardTitle} icon="comment-dots">
       <View style={styles.body}>
         {/* The list never changes order, so the index is fine as a key here */}
         {sentences.map((sentence, index) => (
@@ -74,14 +81,14 @@ export function ForecastSummary({ weather, unit }: ForecastSummaryProps) {
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
         >
           <Icon name={speaking ? 'stop' : 'volume-high'} size={16} color="#2C3E50" />
-          <Text style={styles.buttonText}>{speaking ? 'Stop' : 'Read aloud'}</Text>
+          <Text style={styles.buttonText}>{speaking ? say.stop : say.readAloud}</Text>
         </Pressable>
 
         {voice === null && (
           <Text style={styles.voiceHint}>
-            No Nigerian voice found, so a standard English voice is used. To add one, open your
-            phone's Settings, search for "Text-to-speech", choose Google as the engine, then
-            install the "English (Nigeria)" voice and restart the app.
+            No Nigerian voice found, so a standard voice is used. To add one, open your phone's
+            Settings, search for "Text-to-speech", choose Google as the engine, then install the
+            "English (Nigeria)" voice and restart the app.
           </Text>
         )}
       </View>
@@ -122,6 +129,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 13,
     lineHeight: 18,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
 });

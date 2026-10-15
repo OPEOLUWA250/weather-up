@@ -26,6 +26,16 @@ interface OpenMeteoResponse {
     temperature_2m_max: number[];
     temperature_2m_min: number[];
     precipitation_probability_max: (number | null)[]; // Can be missing for some days
+    uv_index_max: (number | null)[];
+    sunrise: string[];
+    sunset: string[];
+  };
+}
+
+// The shape of the JSON from the air quality API.
+interface AirQualityResponse {
+  current: {
+    us_aqi: number | null;
   };
 }
 
@@ -43,7 +53,23 @@ interface GeocodingResponse {
 }
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
+const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
+
+// Air quality is a nice extra, not essential: if it fails, return null
+// instead of throwing, so the weather still shows.
+async function fetchAirQuality(city: City): Promise<number | null> {
+  try {
+    const url = `${AIR_QUALITY_URL}?latitude=${city.latitude}&longitude=${city.longitude}&current=us_aqi`;
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const data: AirQualityResponse = await response.json();
+    return data.current.us_aqi;
+  } catch (error) {
+    console.warn('Could not load air quality:', error);
+    return null;
+  }
+}
 
 // `async` means this function does slow work (a network request).
 // It returns a Promise: "I'll give you a Weather object when I'm done."
@@ -53,10 +79,12 @@ export async function fetchWeather(city: City): Promise<Weather> {
     '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day' +
     '&hourly=temperature_2m,weather_code,is_day' +
     '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+    ',uv_index_max,sunrise,sunset' +
     '&timezone=auto&forecast_days=7&forecast_hours=24';
 
-  // `await` pauses here until the server responds.
-  const response = await fetch(url);
+  // Promise.all runs both requests AT THE SAME TIME and waits for both,
+  // which is faster than doing one after the other.
+  const [response, airQuality] = await Promise.all([fetch(url), fetchAirQuality(city)]);
 
   // `ok` is false for errors like 404 (not found) or 500 (server problem).
   if (!response.ok) {
@@ -81,6 +109,10 @@ export async function fetchWeather(city: City): Promise<Weather> {
     low: data.daily.temperature_2m_min[0],
     humidity: data.current.relative_humidity_2m,
     windSpeed: Math.round(data.current.wind_speed_10m),
+    uvIndex: data.daily.uv_index_max[0] ?? 0,
+    airQuality,
+    sunrise: data.daily.sunrise[0],
+    sunset: data.daily.sunset[0],
     // Combine the separate lists into one object per hour, using the index `i`.
     hourly: data.hourly.time.map((time, i) => {
       const info = getWeatherInfo(data.hourly.weather_code[i], data.hourly.is_day[i] === 1);

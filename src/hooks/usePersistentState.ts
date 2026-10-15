@@ -7,6 +7,9 @@ import { useEffect, useState } from 'react';
 // `<T>` is a "generic": T stands for whatever type you use it with.
 //   usePersistentState<Unit>('unit', 'C')        → T is Unit
 //   usePersistentState<City[]>('favourites', []) → T is City[]
+//
+// Returns [value, setValue, loaded]. `loaded` becomes true once the saved
+// value has been read, so code can wait for it (e.g. "which city was last?").
 export function usePersistentState<T>(key: string, initialValue: T) {
   const [value, setValue] = useState<T>(initialValue);
   const [loaded, setLoaded] = useState(false);
@@ -37,6 +40,6 @@ export function usePersistentState<T>(key: string, initialValue: T) {
       .catch((error) => console.warn(`Could not save "${key}":`, error));
   }, [key, value, loaded]);
 
-  // `as const` tells TypeScript this is exactly [value, setter], like useState.
-  return [value, setValue] as const;
+  // `as const` tells TypeScript this is exactly [value, setter, loaded].
+  return [value, setValue, loaded] as const;
 }

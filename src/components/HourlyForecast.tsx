@@ -8,9 +8,11 @@ import { Icon } from './Icon';
 interface HourlyForecastProps {
   hours: HourForecast[];
   unit: Unit;
+  // false when showing a saved (offline) forecast: the first hour may not be "now" any more
+  isLive: boolean;
 }
 
-export function HourlyForecast({ hours, unit }: HourlyForecastProps) {
+export function HourlyForecast({ hours, unit, isLive }: HourlyForecastProps) {
   return (
     <Card title="Hourly forecast" icon="clock">
       {/* FlatList draws a list from an array. `horizontal` makes it scroll sideways. */}
@@ -23,7 +25,9 @@ export function HourlyForecast({ hours, unit }: HourlyForecastProps) {
         contentContainerStyle={styles.list}
         renderItem={({ item, index }) => (
           <View style={styles.hour}>
-            <Text style={styles.time}>{index === 0 ? 'Now' : formatHour(item.time)}</Text>
+            <Text style={styles.time}>
+              {index === 0 && isLive ? 'Now' : formatHour(item.time)}
+            </Text>
             <Icon name={item.icon} size={22} color="#fff" style={styles.hourIcon} />
             <Text style={styles.temperature}>{formatTemp(item.temperature, unit)}</Text>
           </View>
