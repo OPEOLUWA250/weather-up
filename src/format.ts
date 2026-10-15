@@ -1,3 +1,12 @@
+import { Unit } from './types';
+
+// Turns a °C temperature into display text in the chosen unit: 26.6 → "27°" or "80°".
+// All temperatures are stored in °C; we only convert at the last moment.
+export function formatTemp(celsius: number, unit: Unit): string {
+  const value = unit === 'F' ? (celsius * 9) / 5 + 32 : celsius;
+  return `${Math.round(value)}°`;
+}
+
 // Turns "2026-10-16T09:00" into "9 AM".
 //
 // We read the hour straight from the text instead of using `new Date()`.

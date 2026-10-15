@@ -1,14 +1,31 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { fetchWeather } from './src/api';
+import { isSameCity } from './src/cities';
 import { CitySearch } from './src/components/CitySearch';
+import { CurrentWeather } from './src/components/CurrentWeather';
 import { DailyForecast } from './src/components/DailyForecast';
+import { FavouritesBar } from './src/components/FavouritesBar';
+import { ForecastSummary } from './src/components/ForecastSummary';
 import { HourlyForecast } from './src/components/HourlyForecast';
 import { Icon } from './src/components/Icon';
-import { City, Weather } from './src/types';
+import { UnitToggle } from './src/components/UnitToggle';
+import { usePersistentState } from './src/hooks/usePersistentState';
+import { getNigerianVoice } from './src/speech';
+import { DEFAULT_BACKGROUND, getBackground } from './src/theme';
+import { City, Unit, Weather } from './src/types';
 
 // The city shown when the app first opens.
 const DEFAULT_CITY: City = {
@@ -23,31 +40,26 @@ const DEFAULT_CITY: City = {
 // A union type: the screen is always in exactly ONE of these states.
 type Status = 'loading' | 'success' | 'error';
 
-// Props are the inputs a component receives, like arguments to a function.
-interface DetailItemProps {
-  label: string;
-  value: string;
-}
-
-// A small reusable component: one value with a label underneath.
-function DetailItem({ label, value }: DetailItemProps) {
-  return (
-    <View style={styles.detailItem}>
-      <Text style={styles.detailValue}>{value}</Text>
-      <Text style={styles.detailLabel}>{label}</Text>
-    </View>
-  );
-}
-
 export default function App() {
   // State: data that can change. When it changes, the screen re-draws.
   const [city, setCity] = useState<City>(DEFAULT_CITY);
   const [status, setStatus] = useState<Status>('loading');
   const [weather, setWeather] = useState<Weather | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Defined here (not inside useEffect) so the "Try again" button can call it too.
-  async function loadWeather() {
-    setStatus('loading');
+  // Like useState, but saved on the phone, so they survive closing the app.
+  const [favourites, setFavourites] = usePersistentState<City[]>('favourites', []);
+  const [unit, setUnit] = usePersistentState<Unit>('unit', 'C');
+
+  // `isRefresh` is true when the user pulls down to refresh: we keep the
+  // current weather on screen and show the small pull-down spinner instead.
+  async function loadWeather(isRefresh = false) {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setStatus('loading');
+    }
+
     try {
       const data = await fetchWeather(city);
       setWeather(data);
@@ -55,6 +67,8 @@ export default function App() {
     } catch (error) {
       console.error('Could not load weather:', error);
       setStatus('error');
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -63,76 +77,118 @@ export default function App() {
     loadWeather();
   }, [city]);
 
+  // Wake up the text-to-speech engine early, so "Read aloud" starts instantly.
+  useEffect(() => {
+    getNigerianVoice();
+  }, []);
+
+  const isFavourite = favourites.some((saved) => isSameCity(saved, city));
+
+  function toggleFavourite() {
+    if (isFavourite) {
+      // .filter() keeps every city EXCEPT this one
+      setFavourites(favourites.filter((saved) => !isSameCity(saved, city)));
+    } else {
+      // [...list, item] makes a NEW list with the item added at the end
+      setFavourites([...favourites, city]);
+    }
+  }
+
+  // The background follows the weather. Before any weather loads, use the default.
+  const background = weather ? getBackground(weather.group, weather.isDay) : DEFAULT_BACKGROUND;
+
   return (
     <SafeAreaProvider>
-      {/* SafeAreaView keeps content clear of the status bar and system buttons */}
-      <SafeAreaView style={styles.container}>
-        <CitySearch onSelectCity={setCity} />
+      <LinearGradient colors={background} style={styles.background}>
+        {/* SafeAreaView keeps content clear of the status bar and system buttons */}
+        <SafeAreaView style={styles.container}>
+          <CitySearch onSelectCity={setCity} />
 
-        {/* ScrollView lets the content scroll if it doesn't fit on screen */}
-        <ScrollView
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false} // Hide the scrollbar on the right
-          overScrollMode="never" // Android: no stretch effect at the top/bottom
-        >
-          {/* `condition && (...)` shows the UI only when the condition is true */}
-          {status === 'loading' && (
-            <>
-              <ActivityIndicator size="large" color="#fff" />
-              <Text style={styles.message}>Loading weather...</Text>
-            </>
-          )}
+          <View style={styles.topRow}>
+            <View style={styles.favourites}>
+              <FavouritesBar favourites={favourites} selectedCity={city} onSelect={setCity} />
+            </View>
+            <UnitToggle unit={unit} onChange={setUnit} />
+          </View>
 
-          {status === 'error' && (
-            <>
-              <Icon name="triangle-exclamation" size={64} color="#fff" style={styles.icon} />
-              <Text style={styles.errorTitle}>Couldn't load the weather</Text>
-              <Text style={styles.message}>
-                Check your internet connection and try again.
-              </Text>
-              <Pressable
-                onPress={loadWeather}
-                style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
-              >
-                <Text style={styles.retryButtonText}>Try again</Text>
-              </Pressable>
-            </>
-          )}
+          {/* ScrollView lets the content scroll if it doesn't fit on screen */}
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false} // Hide the scrollbar on the right
+            overScrollMode="never" // Android: no stretch effect at the top/bottom
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={() => loadWeather(true)}
+                colors={['#4A90E2']} // Android spinner colour
+                tintColor="#fff" // iOS spinner colour
+              />
+            }
+          >
+            {/* `condition && (...)` shows the UI only when the condition is true */}
+            {status === 'loading' && (
+              <>
+                <ActivityIndicator size="large" color="#fff" />
+                <Text style={styles.message}>Loading weather...</Text>
+              </>
+            )}
 
-          {status === 'success' && weather !== null && (
-            <>
-              <Text style={styles.city}>{weather.city}</Text>
-              <Icon name={weather.icon} size={96} color="#fff" style={styles.icon} />
-              <Text style={styles.temperature}>{weather.temperature}°</Text>
-              <Text style={styles.condition}>{weather.condition}</Text>
-              <Text style={styles.highLow}>
-                H: {weather.high}°   L: {weather.low}°
-              </Text>
+            {status === 'error' && (
+              <>
+                <Icon name="triangle-exclamation" size={64} color="#fff" style={styles.icon} />
+                <Text style={styles.errorTitle}>Couldn't load the weather</Text>
+                <Text style={styles.message}>
+                  Check your internet connection and try again.
+                </Text>
+                <Pressable
+                  // An arrow function, so loadWeather gets NO arguments (isRefresh = false)
+                  onPress={() => loadWeather()}
+                  style={({ pressed }) => [styles.retryButton, pressed && styles.retryButtonPressed]}
+                >
+                  <Text style={styles.retryButtonText}>Try again</Text>
+                </Pressable>
+              </>
+            )}
 
-              <View style={styles.detailsCard}>
-                <DetailItem label="Feels like" value={`${weather.feelsLike}°`} />
-                <DetailItem label="Humidity" value={`${weather.humidity}%`} />
-                <DetailItem label="Wind" value={`${weather.windSpeed} km/h`} />
-              </View>
+            {status === 'success' && weather !== null && (
+              <>
+                <CurrentWeather
+                  weather={weather}
+                  unit={unit}
+                  isFavourite={isFavourite}
+                  onToggleFavourite={toggleFavourite}
+                />
+                <ForecastSummary weather={weather} unit={unit} />
+                <HourlyForecast hours={weather.hourly} unit={unit} />
+                <DailyForecast days={weather.daily} unit={unit} />
+              </>
+            )}
+          </ScrollView>
 
-              <HourlyForecast hours={weather.hourly} />
-              <DailyForecast days={weather.daily} />
-            </>
-          )}
-        </ScrollView>
-
-        <StatusBar style="light" />
-      </SafeAreaView>
+          <StatusBar style="light" />
+        </SafeAreaView>
+      </LinearGradient>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#4A90E2',
     paddingHorizontal: 24,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  favourites: {
+    flex: 1, // Take all the space the unit toggle doesn't need
+    marginRight: 12,
   },
   content: {
     flexGrow: 1, // Fill the available space so content can be centred
@@ -140,50 +196,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 24,
   },
-  city: {
-    fontSize: 32,
-    fontWeight: '600',
-    color: '#fff',
-    textAlign: 'center',
-  },
   icon: {
     marginVertical: 16,
-  },
-  temperature: {
-    fontSize: 96,
-    fontWeight: '200',
-    color: '#fff',
-  },
-  condition: {
-    fontSize: 24,
-    color: '#fff',
-  },
-  highLow: {
-    fontSize: 18,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
-  },
-  detailsCard: {
-    flexDirection: 'row',
-    width: '100%',
-    marginTop: 40,
-    paddingVertical: 20,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  detailItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  detailValue: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
   },
   message: {
     fontSize: 16,

@@ -64,40 +64,63 @@ export async function fetchWeather(city: City): Promise<Weather> {
   }
 
   const data: OpenMeteoResponse = await response.json();
-  const { condition, icon } = getWeatherInfo(
-    data.current.weather_code,
-    data.current.is_day === 1,
-  );
+  const isDay = data.current.is_day === 1;
+  const current = getWeatherInfo(data.current.weather_code, isDay);
 
   // Convert the API's format into our app's own Weather format.
+  // Temperatures stay unrounded in °C; formatTemp() converts and rounds them for display.
   return {
     city: city.country ? `${city.name}, ${city.country}` : city.name,
-    temperature: Math.round(data.current.temperature_2m),
-    feelsLike: Math.round(data.current.apparent_temperature),
-    condition,
-    icon,
-    high: Math.round(data.daily.temperature_2m_max[0]),
-    low: Math.round(data.daily.temperature_2m_min[0]),
+    temperature: data.current.temperature_2m,
+    feelsLike: data.current.apparent_temperature,
+    condition: current.condition,
+    icon: current.icon,
+    group: current.group,
+    isDay,
+    high: data.daily.temperature_2m_max[0],
+    low: data.daily.temperature_2m_min[0],
     humidity: data.current.relative_humidity_2m,
     windSpeed: Math.round(data.current.wind_speed_10m),
     // Combine the separate lists into one object per hour, using the index `i`.
-    hourly: data.hourly.time.map((time, i) => ({
-      time,
-      temperature: Math.round(data.hourly.temperature_2m[i]),
-      icon: getWeatherInfo(data.hourly.weather_code[i], data.hourly.is_day[i] === 1).icon,
-    })),
-    daily: data.daily.time.map((date, i) => ({
-      date,
-      high: Math.round(data.daily.temperature_2m_max[i]),
-      low: Math.round(data.daily.temperature_2m_min[i]),
-      icon: getWeatherInfo(data.daily.weather_code[i], true).icon, // Daytime icons
-      rainChance: data.daily.precipitation_probability_max[i] ?? 0,
-    })),
+    hourly: data.hourly.time.map((time, i) => {
+      const info = getWeatherInfo(data.hourly.weather_code[i], data.hourly.is_day[i] === 1);
+      return {
+        time,
+        temperature: data.hourly.temperature_2m[i],
+        icon: info.icon,
+        group: info.group,
+      };
+    }),
+    daily: data.daily.time.map((date, i) => {
+      const info = getWeatherInfo(data.daily.weather_code[i], true); // Daytime icons
+      return {
+        date,
+        high: data.daily.temperature_2m_max[i],
+        low: data.daily.temperature_2m_min[i],
+        icon: info.icon,
+        group: info.group,
+        rainChance: data.daily.precipitation_probability_max[i] ?? 0,
+      };
+    }),
   };
 }
 
 // Turns a name like "Abuja" into a list of matching places with coordinates.
 export async function searchCities(query: string): Promise<City[]> {
+  const cities = await searchCitiesOnce(query);
+
+  // The API understands "Ijegun, Lagos" but finds nothing for "Ijegun Lagos".
+  // So if a search with spaces (and no comma) finds nothing, try again with a
+  // comma after the first word: "Ijegun Lagos" → "Ijegun, Lagos".
+  const words = query.trim().split(/\s+/); // Split on spaces
+  if (cities.length === 0 && words.length > 1 && !query.includes(',')) {
+    return searchCitiesOnce(`${words[0]}, ${words.slice(1).join(' ')}`);
+  }
+
+  return cities;
+}
+
+async function searchCitiesOnce(query: string): Promise<City[]> {
   // encodeURIComponent makes text safe for a URL, e.g. "New York" → "New%20York"
   const url =
     `${GEOCODING_URL}?name=${encodeURIComponent(query)}` +

@@ -1,15 +1,16 @@
 import { StyleSheet, Text, View } from 'react-native';
 
-import { formatDay } from '../format';
-import { DayForecast } from '../types';
+import { formatDay, formatTemp } from '../format';
+import { DayForecast, Unit } from '../types';
 import { Card } from './Card';
 import { Icon } from './Icon';
 
 interface DailyForecastProps {
   days: DayForecast[];
+  unit: Unit;
 }
 
-export function DailyForecast({ days }: DailyForecastProps) {
+export function DailyForecast({ days, unit }: DailyForecastProps) {
   // The coldest and hottest temperatures of the whole week.
   // `...` (spread) turns the array into separate arguments: Math.min(25, 26, 24, ...)
   const weekLow = Math.min(...days.map((day) => day.low));
@@ -42,11 +43,11 @@ export function DailyForecast({ days }: DailyForecastProps) {
               )}
             </View>
 
-            <Text style={styles.low}>{day.low}°</Text>
+            <Text style={styles.low}>{formatTemp(day.low, unit)}</Text>
             <View style={styles.barTrack}>
               <View style={[styles.barFill, { left: `${barStart}%`, width: `${barWidth}%` }]} />
             </View>
-            <Text style={styles.high}>{day.high}°</Text>
+            <Text style={styles.high}>{formatTemp(day.high, unit)}</Text>
           </View>
         );
       })}

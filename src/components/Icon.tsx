@@ -23,17 +23,32 @@ export type IconName =
   | 'location-crosshairs'
   | 'clock'
   | 'calendar-days'
-  | 'droplet';
+  | 'droplet'
+  | 'star'
+  | 'comment-dots'
+  | 'volume-high'
+  | 'stop';
 
 interface IconProps {
   name: IconName;
   size: number;
   color: string;
   style?: StyleProp<TextStyle>;
+  // Most free icons only exist in "solid", so that's the default.
+  // A few (like 'star') also have an outlined "regular" version.
+  variant?: 'solid' | 'regular';
 }
 
-// A wrapper around Font Awesome 6 that always uses the "solid" style,
-// because most free weather icons only exist in solid.
-export function Icon({ name, size, color, style }: IconProps) {
-  return <FontAwesome6 name={name} size={size} color={color} style={style} solid />;
+// A wrapper around Font Awesome 6 with type-checked icon names.
+export function Icon({ name, size, color, style, variant = 'solid' }: IconProps) {
+  return (
+    <FontAwesome6
+      name={name}
+      size={size}
+      color={color}
+      style={style}
+      solid={variant === 'solid'}
+      regular={variant === 'regular'}
+    />
+  );
 }
