@@ -107,6 +107,7 @@ export async function scheduleMorningAlerts(
     if (alertTime <= now) continue; // This morning has already passed
 
     await api.scheduleNotificationAsync({
+      identifier: `morning-${day.date}`, // Our own readable ID, e.g. "morning-2026-10-17"
       content: {
         title: say.morningTitle(weather.city),
         body: say.morningBody(formatTemp(day.low, unit), formatTemp(day.high, unit), day.rainChance),
@@ -129,6 +130,7 @@ export async function sendTestAlert(language: Language): Promise<void> {
   if (api === null) return;
   const say = PHRASES[language];
   await api.scheduleNotificationAsync({
+    identifier: 'test-alert',
     content: {
       title: say.morningTitle('Weather Up'),
       body: say.morningBody('26°', '31°', 80),

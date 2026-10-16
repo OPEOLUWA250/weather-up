@@ -96,26 +96,45 @@ export default function SettingsScreen() {
     );
   }
 
+  // Shown when the phone itself refuses (e.g. Expo Go's limited notification support).
+  // The details help us find out exactly what went wrong.
+  function showErrorMessage(error: unknown) {
+    const details = error instanceof Error ? error.message : String(error);
+    Alert.alert(
+      "Couldn't send the alert",
+      "Notifications don't fully work inside Expo Go. They will in the full app (APK).\n\n" +
+        `Details: ${details}`,
+    );
+  }
+
   async function handleAlertChange(on: boolean) {
     if (!on) {
       setMorningAlert(false);
       return;
     }
     // Turning it ON: we need permission first.
-    const allowed = await requestAlertPermission();
-    if (allowed) {
-      setMorningAlert(true);
-    } else {
-      showBlockedMessage();
+    try {
+      const allowed = await requestAlertPermission();
+      if (allowed) {
+        setMorningAlert(true);
+      } else {
+        showBlockedMessage();
+      }
+    } catch (error) {
+      showErrorMessage(error);
     }
   }
 
   async function handleTestAlert() {
-    const allowed = await requestAlertPermission();
-    if (allowed) {
-      await sendTestAlert(language);
-    } else {
-      showBlockedMessage();
+    try {
+      const allowed = await requestAlertPermission();
+      if (allowed) {
+        await sendTestAlert(language);
+      } else {
+        showBlockedMessage();
+      }
+    } catch (error) {
+      showErrorMessage(error);
     }
   }
 
